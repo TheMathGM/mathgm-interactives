@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dice Distribution Explorer — Math GM</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a1520;
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1rem;
+      font-family: Georgia, serif;
+      min-height: 100vh;
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+    }
+
+    .widget {
+      width: 100%; max-width: 780px;
+      background: #0D1B2A; border-radius: 8px; padding: 1.25rem;
+    }
+
+    .section { margin-bottom: 1rem; }
+
+    .label {
+      font-size: 11px; color: rgba(212,160,23,0.5);
+      letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px;
+    }
+
+    .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .controls-row {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 1rem; flex-wrap: wrap;
+    }
+
+    .control-group { display: flex; align-items: center; gap: 8px; }
+
+    .big-num {
+      font-size: 20px; color: #D4A017;
+      min-width: 28px; text-align: center;
+    }
+
+    .config-label { font-size: 15px; color: #D4A017; letter-spacing: 0.04em; }
+
+    button {
+      background: transparent;
+      border: 1px solid rgba(212,160,23,0.6);
+      color: #D4A017; border-radius: 4px;
+      padding: 4px 11px; cursor: pointer;
+      font-size: 16px; font-family: Georgia, serif;
+      line-height: 1; transition: background 0.15s;
+    }
+
+    button:hover { background: rgba(212,160,23,0.1); }
+
+    #btn-dc-toggle {
+      font-size: 12px; letter-spacing: 0.06em;
+      text-transform: uppercase; color: rgba(212,160,23,0.6);
+      border-color: rgba(212,160,23,0.5); padding: 4px 12px;
+    }
+
+    #btn-dc-toggle.active {
+      color: #D4A017; border-color: #D4A017;
+      background: rgba(212,160,23,0.12);
+    }
+
+    .die-btn {
+      background: transparent;
+      border: 1px solid rgba(212,160,23,0.5);
+      color: #D4A017; border-radius: 4px;
+      padding: 5px 10px; cursor: pointer;
+      font-size: 13px; font-family: Georgia, serif;
+      transition: background 0.15s;
+    }
+
+    .die-btn.active {
+      background: rgba(212,160,23,0.18);
+      border-color: #D4A017;
+    }
+
+    .stats-row {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 8px; margin-bottom: 1rem;
+    }
+
+    .stat-box {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(212,160,23,0.15);
+      border-radius: 6px; padding: 0.6rem 0.75rem; text-align: center;
+    }
+
+    .stat-label {
+      font-size: 10px; color: rgba(212,160,23,0.55);
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px;
+    }
+
+    .stat-val { font-size: 15px; color: #D4A017; font-weight: 500; }
+
+    .legend-row {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 6px; font-size: 12px;
+      color: rgba(212,160,23,0.7); flex-wrap: wrap;
+    }
+
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+
+    .legend-swatch {
+      width: 10px; height: 10px;
+      border-radius: 2px; display: inline-block;
+    }
+
+    .legend-swatch.green { background: #39FF14; }
+    .legend-swatch.green-dim {
+      background: rgba(57,255,20,0.25);
+      border: 1px solid rgba(57,255,20,0.5);
+    }
+
+    .legend-dash { width: 18px; height: 0; display: inline-block; }
+    .legend-dash.amber { border-top: 2px dashed #D4A017; }
+    .legend-dash.white { border-top: 2px dashed rgba(255,255,255,0.7); }
+
+    .chart-wrapper { position: relative; width: 100%; height: 260px; }
+
+    .dc-callout {
+      margin-top: 1rem; padding: 0.75rem 1rem;
+      border-left: 3px solid rgba(212,160,23,0.6);
+      background: rgba(255,255,255,0.04);
+      border-radius: 0 6px 6px 0;
+    }
+
+    .dc-callout-inner { display: flex; gap: 24px; flex-wrap: wrap; }
+
+    .dc-callout-label {
+      font-size: 12px; color: rgba(212,160,23,0.6);
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;
+    }
+
+    .dc-prob { font-size: 22px; color: #39FF14; font-weight: 500; }
+    .dc-prob.dim { opacity: 0.4; }
+
+    .branding {
+      margin-top: 1.25rem; font-size: 11px;
+      color: rgba(212,160,23,0.3); text-align: right;
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+  <h2 class="sr-only">Interactive dice probability distribution explorer with DC threshold</h2>
+
+  <div class="widget">
+
+    <div class="section">
+      <div class="label">die type</div>
+      <div id="type-buttons" class="btn-row"></div>
+    </div>
+
+    <div class="controls-row">
+      <div class="control-group">
+        <div class="label">dice</div>
+        <button onclick="changeDice(-1)">−</button>
+        <span id="dice-num" class="big-num">1</span>
+        <button onclick="changeDice(1)">+</button>
+      </div>
+      <div class="control-group">
+        <div class="label">modifier</div>
+        <button onclick="changeMod(-1)">−</button>
+        <span id="mod-display" class="big-num">+0</span>
+        <button onclick="changeMod(1)">+</button>
+      </div>
+      <span id="config-label" class="config-label">1d20</span>
+    </div>
+
+    <div class="controls-row">
+      <div class="label">target DC</div>
+      <button id="btn-dc-toggle" onclick="toggleDC()">off</button>
+      <div id="dc-controls" class="control-group" style="display:none;">
+        <button onclick="changeDC(-1)">−</button>
+        <span id="dc-val-display" class="big-num">15</span>
+        <button onclick="changeDC(1)">+</button>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-label">range</div>
+        <div id="stat-range" class="stat-val">1 – 20</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">mean</div>
+        <div id="stat-mean" class="stat-val">10.5</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">mode</div>
+        <div id="stat-mode" class="stat-val">all equal</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">std dev</div>
+        <div id="stat-sd" class="stat-val">5.77</div>
+      </div>
+    </div>
+
+    <div class="legend-row">
+      <span class="legend-item"><span class="legend-swatch green"></span> P(success)</span>
+      <span class="legend-item" id="legend-fail" style="display:none;"><span class="legend-swatch green-dim"></span> P(≤ DC)</span>
+      <span class="legend-item"><span class="legend-dash amber"></span> uniform reference</span>
+      <span class="legend-item" id="legend-dc-line" style="display:none;"><span class="legend-dash white"></span> DC</span>
+    </div>
+
+    <div class="chart-wrapper">
+      <canvas id="dist-chart" role="img" aria-label="Probability distribution histogram with optional DC threshold line"></canvas>
+    </div>
+
+    <div id="dc-callout" style="display:none;" class="dc-callout">
+      <div class="dc-callout-inner">
+        <div>
+          <div class="dc-callout-label">P(result ≤ DC <span id="dc-callout-val">15</span>)</div>
+          <div id="dc-prob-fail" class="dc-prob dim">—</div>
+        </div>
+        <div>
+          <div class="dc-callout-label">P(result > DC <span id="dc-callout-val2">15</span>)</div>
+          <div id="dc-prob-succeed" class="dc-prob">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="branding">Math GM — Roll with Intention</div>
+
+  </div>
+
+  <script>
+    const DICE = [2,4,6,8,10,12,20,100];
+    const MAX_DICE = 10;
+    const MOD_MIN = -20, MOD_MAX = 20;
+    let currentFaces = 20, currentCount = 1, currentMod = 0;
+    let dcEnabled = false, dcValue = 15;
+    let chart = null;
+
+    const dcLinePlugin = {
+      id: 'dcLinePlugin',
+      afterDraw(chart) {
+        if (!dcEnabled) return;
+        const { ctx, chartArea: { left, right, top, bottom }, data: { labels } } = chart;
+        const barW = (right - left) / labels.length;
+        const dcIdx = labels.indexOf(dcValue);
+        let xPos = dcIdx < 0 ? (dcValue < labels[0] ? left : right) : left + (dcIdx + 1) * barW;
+        ctx.save();
+        ctx.beginPath();
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+        ctx.lineWidth = 2;
+        ctx.moveTo(xPos, top);
+        ctx.lineTo(xPos, bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = '11px Georgia, serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.textAlign = xPos > right - 40 ? 'right' : 'left';
+        ctx.fillText('DC ' + dcValue, xPos + (xPos > right - 40 ? -6 : 6), top + 14);
+        ctx.restore();
+      }
+    };
+
+    Chart.register(dcLinePlugin);
+
+    function computeDist(numDice, faces) {
+      let dist = {};
+      for (let k = 1; k <= faces; k++) dist[k] = 1 / faces;
+      for (let d = 1; d < numDice; d++) {
+        const next = {};
+        for (const [sum, prob] of Object.entries(dist)) {
+          for (let f = 1; f <= faces; f++) {
+            const s = +sum + f;
+            next[s] = (next[s] || 0) + prob / faces;
+          }
+        }
+        dist = next;
+      }
+      return dist;
+    }
+
+    function buildData(dist, numDice, faces, mod) {
+      const labels = [], probs = [];
+      for (let k = numDice; k <= numDice * faces; k++) {
+        labels.push(k + mod);
+        probs.push((dist[k] || 0) * 100);
+      }
+      return { labels, probs };
+    }
+
+    function getBarColors(labels) {
+      return labels.map(l => dcEnabled && l <= dcValue ? 'rgba(57,255,20,0.25)' : '#39FF14');
+    }
+
+    function calcDCProbs(labels, probs) {
+      let fail = 0;
+      for (let i = 0; i < labels.length; i++) {
+        if (labels[i] <= dcValue) fail += probs[i];
+      }
+      return { fail: Math.min(fail, 100), succeed: Math.max(0, 100 - fail) };
+    }
+
+    function getConfigLabel(n, f, m) {
+      let s = n + 'd' + f;
+      if (m > 0) s += '+' + m;
+      else if (m < 0) s += m;
+      return s;
+    }
+
+    function buildTypeButtons() {
+      const container = document.getElementById('type-buttons');
+      container.innerHTML = '';
+      DICE.forEach(d => {
+        const btn = document.createElement('button');
+        btn.textContent = 'd' + d;
+        btn.id = 'btn-d' + d;
+        btn.className = 'die-btn' + (d === currentFaces ? ' active' : '');
+        btn.onclick = () => { currentFaces = d; currentCount = 1; render(); };
+        container.appendChild(btn);
+      });
+    }
+
+    function updateTypeButtons() {
+      DICE.forEach(d => {
+        const btn = document.getElementById('btn-d' + d);
+        if (btn) btn.className = 'die-btn' + (d === currentFaces ? ' active' : '');
+      });
+    }
+
+    function render() {
+      const dist = computeDist(currentCount, currentFaces);
+      const { labels, probs } = buildData(dist, currentCount, currentFaces, currentMod);
+      const mean = currentCount * (currentFaces + 1) / 2 + currentMod;
+      const sd = Math.sqrt(currentCount * (currentFaces * currentFaces - 1) / 12);
+      const maxP = Math.max(...probs);
+      const modes = labels.filter((_, i) => Math.abs(probs[i] - maxP) < 0.0001);
+      const modeStr = currentCount === 1 ? 'all equal'
+        : modes.length > 2 ? modes[0] + '–' + modes[modes.length - 1]
+        : modes.join(', ');
+
+      document.getElementById('dice-num').textContent = currentCount;
+      document.getElementById('mod-display').textContent = currentMod >= 0 ? '+' + currentMod : '' + currentMod;
+      document.getElementById('config-label').textContent = getConfigLabel(currentCount, currentFaces, currentMod);
+      document.getElementById('stat-range').textContent = labels[0] + ' – ' + labels[labels.length - 1];
+      document.getElementById('stat-mean').textContent = mean % 1 === 0 ? mean : mean.toFixed(1);
+      document.getElementById('stat-mode').textContent = modeStr;
+      document.getElementById('stat-sd').textContent = sd.toFixed(2);
+      updateTypeButtons();
+
+      const colors = getBarColors(labels);
+      const uniformPct = (1 / currentFaces) * 100;
+      const uniformLine = new Array(labels.length).fill(uniformPct);
+      const numBars = labels.length;
+      const tickLimit = numBars > 100 ? 10 : numBars > 40 ? 20 : numBars;
+
+      if (dcEnabled) {
+        const { fail, succeed } = calcDCProbs(labels, probs);
+        document.getElementById('dc-callout-val').textContent = dcValue;
+        document.getElementById('dc-callout-val2').textContent = dcValue;
+        document.getElementById('dc-prob-fail').textContent = fail.toFixed(1) + '%';
+        document.getElementById('dc-prob-succeed').textContent = succeed.toFixed(1) + '%';
+        document.getElementById('dc-val-display').textContent = dcValue;
+      }
+
+      if (!chart) {
+        const ctx = document.getElementById('dist-chart').getContext('2d');
+        chart = new Chart(ctx, {
+          data: {
+            labels,
+            datasets: [
+              { type: 'bar', label: 'Probability', data: probs, backgroundColor: colors, borderWidth: 0, borderRadius: numBars > 50 ? 0 : 2, order: 2, barPercentage: numBars > 80 ? 1.0 : 0.9, categoryPercentage: 1.0 },
+              { type: 'line', label: 'Uniform', data: uniformLine, borderColor: '#D4A017', borderWidth: 1.5, borderDash: [5, 4], pointRadius: 0, fill: false, tension: 0, order: 1 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
+            scales: {
+              x: { ticks: { autoSkip: true, maxTicksLimit: tickLimit, font: { size: 10 }, maxRotation: 0, color: '#D4A017' }, grid: { display: false }, border: { color: 'rgba(212,160,23,0.3)' } },
+              y: { min: 0, ticks: { callback: v => v.toFixed(1) + '%', font: { size: 10 }, color: '#D4A017', maxTicksLimit: 6 }, grid: { color: 'rgba(212,160,23,0.1)' }, border: { color: 'rgba(212,160,23,0.3)' } }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: { backgroundColor: '#0D1B2A', borderColor: '#D4A017', borderWidth: 1, titleColor: '#D4A017', bodyColor: '#D4A017', callbacks: { title: items => 'Result: ' + items[0].label, label: item => item.datasetIndex === 0 ? ' P = ' + item.parsed.y.toFixed(3) + '%' : ' Uniform: ' + item.parsed.y.toFixed(3) + '%' } }
+            }
+          }
+        });
+      } else {
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = probs;
+        chart.data.datasets[0].backgroundColor = colors;
+        chart.data.datasets[0].borderRadius = numBars > 50 ? 0 : 2;
+        chart.data.datasets[0].barPercentage = numBars > 80 ? 1.0 : 0.9;
+        chart.data.datasets[1].data = uniformLine;
+        chart.options.scales.x.ticks.maxTicksLimit = tickLimit;
+        chart.update();
+      }
+    }
+
+    function toggleDC() {
+      dcEnabled = !dcEnabled;
+      if (dcEnabled) {
+        const dist = computeDist(currentCount, currentFaces);
+        const { labels } = buildData(dist, currentCount, currentFaces, currentMod);
+        dcValue = Math.round(currentCount * (currentFaces + 1) / 2 + currentMod);
+        if (dcValue < labels[0]) dcValue = labels[0];
+        if (dcValue > labels[labels.length - 1]) dcValue = labels[labels.length - 1];
+      }
+      const toggle = document.getElementById('btn-dc-toggle');
+      toggle.textContent = dcEnabled ? 'on' : 'off';
+      toggle.className = dcEnabled ? 'active' : '';
+      document.getElementById('dc-controls').style.display = dcEnabled ? 'flex' : 'none';
+      document.getElementById('dc-callout').style.display = dcEnabled ? 'block' : 'none';
+      document.getElementById('legend-fail').style.display = dcEnabled ? 'flex' : 'none';
+      document.getElementById('legend-dc-line').style.display = dcEnabled ? 'flex' : 'none';
+      render();
+    }
+
+    function changeDice(d) { const n = currentCount + d; if (n >= 1 && n <= MAX_DICE) { currentCount = n; render(); } }
+    function changeMod(d) { const n = currentMod + d; if (n >= MOD_MIN && n <= MOD_MAX) { currentMod = n; render(); } }
+    function changeDC(d) {
+      const dist = computeDist(currentCount, currentFaces);
+      const { labels } = buildData(dist, currentCount, currentFaces, currentMod);
+      const next = dcValue + d;
+      if (next >= labels[0] && next <= labels[labels.length - 1]) { dcValue = next; render(); }
+    }
+
+    buildTypeButtons();
+    render();
+  </script>
+</body>
+</html>
